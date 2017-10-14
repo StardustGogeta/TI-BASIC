@@ -4,7 +4,7 @@ class ArgumentError(Exception):
 def translateExp(tokens): # Translate literals and operators
     # This function is not responsible for ArgumentErrors
     newTokens = []
-    op = 0
+    op = 1
     comp = 0
     skipCounter = 0
     coeff = False
@@ -19,7 +19,7 @@ def translateExp(tokens): # Translate literals and operators
                     newTokens.insert(-1, '*')
                 elif token[1] == 'String':
                     raise SyntaxError # Trying to multiply strings, are we?
-            elif token[1] == 'Number':
+            elif token[1] in ['Number', 'Variable']:
                 coeff = True
             else:
                 coeff = False
@@ -34,18 +34,25 @@ def translateExp(tokens): # Translate literals and operators
                 raise SyntaxError # Adjacent literals
         elif token[1] == "Operator":
             op = 1
-            if token[0] == 'sqrt':
-                skipCounter = 1
-                # TODO: Allow arithmetic / variable length arguments
-                # TODO: Check for correct types
-                newTokens.append('sqrt('+tokens[i+1]+')')
-            if token[0] == 'remainder':
-                skipCounter = 3
-                # TODO: Allow arithmetic / variable length arguments
-                # TODO: Check for correct types
-                newTokens.append(tokens[i+1][0]+' % '+tokens[i+3][0])
+            opWord = token[0]
+            if opWord in ',/*-+':
+                newTokens.append(token[0])
+            else:
+                if coeff:
+                    newTokens.append('*')
+                if opWord in ['sin','cos','sqrt']:
+                    skipCounter = 1
+                    # TODO: Allow arithmetic / variable length arguments
+                    # TODO: Check for correct types
+                    newTokens.append(opWord+'('+tokens[i+1][0]+')')
+                elif opWord == 'remainder':
+                    skipCounter = 3
+                    # TODO: Allow arithmetic / variable length arguments
+                    # TODO: Check for correct types
+                    newTokens.append(tokens[i+1][0]+' % '+tokens[i+3][0])
+            coeff = False
         else:
-            raise SyntaxError
+            raise SyntaxError # Undefined behavior
     return newTokens
 
 def Prompt(tokens):
@@ -77,4 +84,23 @@ def If(tokens):
     if len(tokens) < 2: # Not enough arguments
         raise ArgumentError
     return ['if '+''.join(translateExp(tokens[1:]))+':']
-    
+
+def Else(tokens):
+    if len(tokens) > 1:
+        raise SyntaxError
+    return ['else:']
+
+def While(tokens):
+    if len(tokens) < 2: # Not enough arguments
+        raise ArgumentError
+    return ['while '+''.join(translateExp(tokens[1:]))+':']
+
+def Disp(tokens):
+    return ['print('+''.join(translateExp(tokens[1:]))+')']
+
+def Assign(tokens):
+    return [tokens[-1][0]+'='+''.join(translateExp(tokens[:-2]))]
+
+def Pass(tokens):
+    return ['pass # '+''.join(translateExp(tokens))]
+

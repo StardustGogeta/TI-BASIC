@@ -10,8 +10,8 @@ def writeToFile(name, data):
     with open(name,'w') as file:
         file.write(data)
 
-written_operators = ["sqrt", "remainder"]
-keywords = ["Prompt", "While", "If", "Then", "End", "Disp"]
+written_operators = ["sqrt", "remainder", "sin", "cos"]
+keywords = ["Prompt", "While", "If", "Then", "Else", "End", "Disp"]
 
 # Watch out for a line like `Asqrt(B)->C`
 def parse(line):
@@ -43,6 +43,7 @@ def parse(line):
             tokenType = "Uppercase"
         elif char in string.ascii_lowercase:
             op_match = 0
+            kw_match = 0
             for op in written_operators: # Check for written operator match
                 if line[i:i+len(op)] == op:
                     skipCounter = len(op)
@@ -81,28 +82,65 @@ def parse(line):
                 tokens.append([char, "Operator"])
     return tokens
 
+def addLines(python, indents, content):
+    python.extend([' ' * 4 * indents + x for x in content])
+
 # Compiling the TI-BASIC to a native Python file
 # NOTE: This overwrites the default `compile` function in Python
 def compile(name, outputName=''):
     python = ['from math import *']
     fileText = openFile(name)
+    indents = 0
+    ifStmt = 0
+    block = 0
     for line in fileText:
+        if ifStmt in (1, 2): # Clock to see whether `if` is expression or block
+            ifStmt -= 1
         tokens = parse(line)
         if not tokens: continue
-        print(tokens)
+        # print(tokens)
         if tokens[0][1] == "Keyword":
-            if tokens[0][0] == "Prompt":
-                python.extend(Prompt(tokens))
-            if tokens[0][0] == "If":
-                python.extend(If(tokens))
+            kw = tokens[0][0]
+            if kw == "Prompt":
+                addLines(python, indents, Prompt(tokens))
+            elif kw == "If":
+                addLines(python, indents, If(tokens))
+                ifStmt = 2
+                indents += 1
+            elif kw == "While":
+                addLines(python, indents, While(tokens))
+                indents += 1
+                block += 1
+            elif kw == "Else":
+                if not ifStmt: # `else` without an `if`
+                    raise SyntaxError
+                addLines(python, indents-1, Else(tokens))
+            elif kw == "Disp":
+                addLines(python, indents, Disp(tokens))
+            elif kw == "Then":
+                if ifStmt: # This is now an if-block, not a single expression
+                    block += 1
+                else: # `then` without an `if`
+                    raise SyntaxError
+            elif kw == "End":
+                indents -= 1
+                if block:
+                    block -= 1
+                else: # `end` without a loop or conditional
+                    raise SyntaxError
+        elif tokens[-2][1] == 'Assignment': # Statement contains assignment
+            addLines(python, indents, Assign(tokens))
+        elif 'Keyword' in (token[1] for token in tokens):
+            raise SyntaxError
+        else:
+            addLines(python, indents, Pass(tokens))
         # Gather all lines, then figure out tabs from scope and `End`s
+    out = '\n'.join(python)
     if outputName:
-        writeToFile(outputName, '\n'.join(python))
-    print('\n'+'\n'.join(python))
+        writeToFile(outputName, out)
+    print('\nOUTPUT:\n\n'+out)
 
 # If return value, print that value
+#       Values are returned by evaluating or assigning expressions as the final
+#       statement in a program
 # Else, print "Done"
-        
-        
-    
-            
