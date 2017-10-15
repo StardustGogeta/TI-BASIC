@@ -2,15 +2,17 @@ import math, string
 from funcs import *
 
 def openFile(name):
-    with open(name) as file:
+    with open(name, encoding='utf-8') as file:
         fileText = file.read().split("\n")
     return fileText
 
 def writeToFile(name, data):
-    with open(name,'w') as file:
+    with open(name,'w', encoding='utf-8') as file:
         file.write(data)
 
-written_operators = ["sqrt", "remainder", "sin", "cos"]
+# Place inverse functions before normal versions
+global written_operators
+written_operators = ["²", "sin⁻¹", "cos⁻¹", "√", "sqrt", "remainder", "sin", "cos", "round"]
 keywords = ["Prompt", "While", "If", "Then", "Else", "End", "Disp"]
 
 # Watch out for a line like `Asqrt(B)->C`
@@ -38,15 +40,15 @@ def parse(line):
         elif char == "\"": # Begin a string
             tokens.append([char, "String"])
             tokenType = "String"
-        elif char in string.ascii_uppercase:
+        elif char in string.ascii_uppercase or char == 'θ':
             tokens.append([char, "Variable"])
             tokenType = "Uppercase"
-        elif char in string.ascii_lowercase:
+        elif char in string.ascii_lowercase or char in '√²':
             op_match = 0
             kw_match = 0
             for op in written_operators: # Check for written operator match
                 if line[i:i+len(op)] == op:
-                    skipCounter = len(op)
+                    skipCounter = len(op) if op != '²' else 0
                     tokens.append([op, "Operator"])
                     tokenType = None
                     op_match = 1
@@ -72,7 +74,7 @@ def parse(line):
             if char == ">" and tokens[-1][0] == "-": # Variable assignment
                 tokens[-1][0] += char
                 tokens[-1][1] = "Assignment"
-            elif char == "=":
+            elif char in "<=>":
                 if tokens[-1][0] in "<>!": # Inequalities
                     tokens[-1][0] += char
                     tokens[-1][1] = "Comparator"
@@ -87,8 +89,11 @@ def addLines(python, indents, content):
 
 # Compiling the TI-BASIC to a native Python file
 # NOTE: This overwrites the default `compile` function in Python
+# Example: `compile('test/ARMY.8XP','test/ARMY.py')`
 def compile(name, outputName=''):
-    python = ['from math import *']
+    python = ['from math import *',
+                      'def disp(*args):', # Remove decimal points from integers when printing
+                      '        print(" ".join(str(int(arg) if type(arg) == float and arg % 1 == 0 else arg) for arg in args))\n']
     fileText = openFile(name)
     indents = 0
     ifStmt = 0
@@ -98,7 +103,7 @@ def compile(name, outputName=''):
             ifStmt -= 1
         tokens = parse(line)
         if not tokens: continue
-        # print(tokens)
+        #print(tokens)
         if tokens[0][1] == "Keyword":
             kw = tokens[0][0]
             if kw == "Prompt":
@@ -112,7 +117,8 @@ def compile(name, outputName=''):
                 indents += 1
                 block += 1
             elif kw == "Else":
-                if not ifStmt: # `else` without an `if`
+                if not block: # `else` without an `if`
+                    # TODO: Better detection to ensure `while` does not satisfy `else`
                     raise SyntaxError
                 addLines(python, indents-1, Else(tokens))
             elif kw == "Disp":
